@@ -224,15 +224,22 @@ async function verifyPurchases(page, titles) {
     process.exit(1);
   }
 
+  const isCI = process.env.GITHUB_ACTIONS === "true";
+
   const browser = await puppeteer.launch({
-    headless: true, // ← Change to true for CI
+    headless: isCI ? "new" : false,
+
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage", // ← Important for Linux CI
+      "--disable-dev-shm-usage",
       "--disable-gpu",
-    ],
+      "--no-first-run",
+      "--no-zygote",
+      isCI ? "--single-process" : null,
+    ].filter(Boolean),
   });
 
   const page = await browser.newPage();
