@@ -1,0 +1,44 @@
+name: Epic Games Auto Claim
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm 
+
+      - name: Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        id: chromium-cache
+        with:
+          path: ~/.cache/puppeteer
+          key: chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npm ci 
+
+      - name: Install Chromium (only if not cached)
+        if: steps.chromium-cache.outputs.cache-hit != 'true'
+        run: npx puppeteer browsers install chrome
+
+      - name: Write cookies
+        run: echo '${{ secrets.EPIC_COOKIES }}' > epic-cookies.json
+
+      - name: Run claim script
+        run: node index.js
+
+      - name: Update cookies secret
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh secret set EPIC_COOKIES < epic-cookies.json
