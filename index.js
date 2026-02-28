@@ -117,20 +117,17 @@ async function waitForPurchaseFrame(page, timeout = 15000) {
 }
 
 async function claimGame(page, game) {
+  const slug = game.title.replace(/[^a-z0-9]/gi, "_");
+  const ss = (label) => page.screenshot({ path: `ss_${slug}_${label}.png`, fullPage: true });
+
   console.log(`\n➡️  [${game.title}]\n   URL: ${BASE_URL + game.href}`);
-  await page.goto(BASE_URL + game.href, {
-    waitUntil: "networkidle2",
-    timeout: 30000,
-  });
+  await page.goto(BASE_URL + game.href, { waitUntil: "networkidle2", timeout: 30000 });
 
   try {
-    await page.waitForSelector('[data-testid="purchase-cta-button"]', {
-      visible: true,
-      timeout: 15000,
-    });
+    await page.waitForSelector('[data-testid="purchase-cta-button"]', { visible: true, timeout: 15000 });
   } catch {
-    console.log(`   ⚠️  "Get" button not found, skipping.`);
-    return;
+    await ss("1_no_get_btn");
+    return console.log(`   ⚠️  "Get" button not found, skipping.`);
   }
 
   await sleep(1000);
@@ -138,61 +135,68 @@ async function claimGame(page, game) {
   const btnText = await page.evaluate((el) => el.innerText.trim(), getBtn);
   console.log(`   🔘 Button: "${btnText}"`);
 
-  if (/in library/i.test(btnText))
-    return console.log(`   ✅ Already in library.`);
-  if (!/get/i.test(btnText))
-    return console.log(`   ⚠️  Unexpected button "${btnText}", skipping.`);
+  if (/in library/i.test(btnText)) return console.log(`   ✅ Already in library.`);
+  if (!/get/i.test(btnText))       return console.log(`   ⚠️  Unexpected button "${btnText}", skipping.`);
 
+  await ss("2_before_get_click");
   await getBtn.click();
   console.log(`   🖱️  Clicked "Get"`);
 
-  // Handle possible ToS checkbox
   await sleep(2000);
+  await ss("3_after_get_click");
+
+  // Handle possible ToS checkbox
   try {
     const checkbox = await page.$('input[type="checkbox"]');
-    if (checkbox) {
-      await checkbox.click();
-      console.log("   ☑️  ToS checkbox clicked");
-      await sleep(500);
-    }
+    if (checkbox) { await checkbox.click(); console.log("   ☑️  ToS checkbox clicked"); await sleep(500); }
   } catch {}
 
   console.log('   ⏳ Waiting for "Place Order" modal...');
   const result = await waitForPurchaseFrame(page, 15000);
-  if (!result) return console.log(`   ⚠️  "Place Order" modal not found.`);
+
+  if (!result) {
+    await ss("4_no_modal");
+    return console.log(`   ⚠️  "Place Order" modal not found.`);
+  }
+
+  await ss("5_modal_found");
+  console.log(`   ✅ Modal found.`);
+
+  try {
+    await result.frame.evaluate(() => {
+      document.body.style.border = "3px solid red"; 
+    });
+  } catch {}
 
   await sleep(1000);
   await result.btn.click();
   console.log(`   🖱️  Clicked "Place Order"`);
-  await sleep(5000);
+
+  await sleep(2000);
+  await ss("6_after_place_order");
+  await sleep(3000);
+  await ss("7_final_state");
 
   // Verify claim
   let claimed = false;
   try {
     await page.waitForFunction(
-      () =>
-        /in library/i.test(
-          document.querySelector('[data-testid="purchase-cta-button"]')
-            ?.innerText ?? "",
-        ),
-      { timeout: 15000 },
+      () => /in library/i.test(document.querySelector('[data-testid="purchase-cta-button"]')?.innerText ?? ""),
+      { timeout: 15000 }
     );
     claimed = true;
   } catch {
     try {
       await page.waitForSelector(
         '[data-component="SuccessMessage"], .success-message, [class*="success"]',
-        { timeout: 5000 },
+        { timeout: 5000 }
       );
       claimed = true;
     } catch {}
   }
 
-  console.log(
-    claimed
-      ? `   🎉 "${game.title}" claimed! (VERIFIED)`
-      : `   ❌ "${game.title}" UNVERIFIED`,
-  );
+  await ss("8_verify_result");
+  console.log(claimed ? `   🎉 "${game.title}" claimed! (VERIFIED)` : `   ❌ "${game.title}" UNVERIFIED`);
   await saveCookies(page);
   await sleep(2000);
 }

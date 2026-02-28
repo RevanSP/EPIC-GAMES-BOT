@@ -37,6 +37,14 @@ jobs:
       - name: Run claim script
         run: node index.js
 
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: ss_*.png
+          retention-days: 3
+
       - name: Update cookies secret
         if: success()
         env:
